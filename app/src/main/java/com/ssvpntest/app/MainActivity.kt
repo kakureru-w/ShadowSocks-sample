@@ -77,6 +77,13 @@ class MainActivity : ComponentActivity(), ShadowsocksConnection.Callback, OnPref
         BaseService.State.Idle
     })
 
+    override fun onServiceDisconnected() = changeState(BaseService.State.Idle)
+
+    override fun onBinderDied() {
+        connection.disconnect(this)
+        connection.connect(this, this)
+    }
+
     override fun onPreferenceDataStoreChanged(store: PreferenceDataStore, key: String) {
         when (key) {
             Key.serviceMode -> {
@@ -86,12 +93,10 @@ class MainActivity : ComponentActivity(), ShadowsocksConnection.Callback, OnPref
         }
     }
 
+    // Подключиться/отключиться
     private fun toggle() = if (connectionState.canStop) Core.stopService() else connect.launch(null)
 
-    private fun onKeyValueChange(value: String) {
-        screenState.update { it.copy(keyField = value) }
-    }
-
+    // Создать профиль из строки ключа
     private fun acceptKey() {
         try {
             val profiles = Profile.findAllUrls(
@@ -112,6 +117,7 @@ class MainActivity : ComponentActivity(), ShadowsocksConnection.Callback, OnPref
         toast(R.string.action_import_err)
     }
 
+    // Активировать профиль
     private fun onProfileClick(id: Long) {
         if (isEnabled) {
             Core.switchProfile(id)
@@ -119,11 +125,27 @@ class MainActivity : ComponentActivity(), ShadowsocksConnection.Callback, OnPref
         }
     }
 
-    private fun toast(textResId: Int) {
-        Toast.makeText(this, resources.getString(textResId), Toast.LENGTH_SHORT).show()
+    private fun onKeyValueChange(value: String) {
+        screenState.update { it.copy(keyField = value) }
     }
 
-    private fun toast(text: String) {
-        Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
+    private fun toast(textResId: Int) { Toast.makeText(this, resources.getString(textResId), Toast.LENGTH_SHORT).show() }
+    private fun toast(text: String) { Toast.makeText(this, text, Toast.LENGTH_SHORT).show() }
+
+
+    override fun onStart() {
+        super.onStart()
+        connection.bandwidthTimeout = 500
+    }
+
+    override fun onStop() {
+        connection.bandwidthTimeout = 0
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        DataStore.publicStore.unregisterChangeListener(this)
+        connection.disconnect(this)
     }
 }
